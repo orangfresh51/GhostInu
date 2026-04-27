@@ -740,3 +740,56 @@ contract GhastlyStakingVault is GI_ReentrancyGuard {
     using GI_Math for uint256;
 
     IERC20 public immutable stakeToken;
+    IERC20 public immutable rewardToken;
+
+    address public admin;
+    address public pendingAdmin;
+
+    // A small guardian role dedicated to emergency pause only.
+    address public guardian;
+
+    bool public paused;
+
+    uint64 public immutable startTime;
+    uint64 public immutable endTime;
+
+    uint256 public immutable rewardBudget;
+    uint256 public rewardSpent;
+
+    uint256 public totalStaked;
+
+    // reward accounting: classic "reward per token" accumulator.
+    uint256 public rewardPerTokenStored;
+    uint64 public lastUpdateTime;
+    uint256 public rewardRate; // per second, scaled 1:1 in token decimals
+
+    mapping(address => uint256) public userRewardPerTokenPaid;
+    mapping(address => uint256) public rewards;
+    mapping(address => uint256) public balanceOf;
+
+    event Ghasty_AdminProposed(address indexed currentAdmin, address indexed pendingAdmin);
+    event Ghasty_AdminAccepted(address indexed previousAdmin, address indexed newAdmin);
+    event Ghasty_GuardianSet(address indexed prev, address indexed next);
+    event Ghasty_Paused(address indexed by);
+    event Ghasty_Unpaused(address indexed by);
+    event Ghasty_Staked(address indexed user, uint256 amount);
+    event Ghasty_Unstaked(address indexed user, uint256 amount);
+    event Ghasty_RewardPaid(address indexed user, uint256 amount);
+    event Ghasty_Swept(address indexed token, address indexed to, uint256 amount);
+
+    error Ghasty__Unauthorized();
+    error Ghasty__Paused();
+    error Ghasty__OutOfWindow();
+    error Ghasty__BadConfig();
+    error Ghasty__NoStake();
+
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert Ghasty__Unauthorized();
+        _;
+    }
+
+    modifier onlyGuardianOrAdmin() {
+        if (msg.sender != admin && msg.sender != guardian) revert Ghasty__Unauthorized();
+        _;
+    }
+
