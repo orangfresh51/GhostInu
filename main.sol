@@ -316,3 +316,56 @@ abstract contract GI_ERC20 is IERC20, IERC20Metadata {
 
     uint256 internal _gi_totalSupply;
     mapping(address => uint256) internal _gi_balance;
+    mapping(address => mapping(address => uint256)) internal _gi_allowance;
+
+    constructor(string memory name_, string memory symbol_, uint8 decimals_) {
+        _gi_name = name_;
+        _gi_symbol = symbol_;
+        _gi_decimals = decimals_;
+    }
+
+    function name() external view returns (string memory) { return _gi_name; }
+    function symbol() external view returns (string memory) { return _gi_symbol; }
+    function decimals() external view returns (uint8) { return _gi_decimals; }
+
+    function totalSupply() external view returns (uint256) { return _gi_totalSupply; }
+    function balanceOf(address who) external view returns (uint256) { return _gi_balance[who]; }
+    function allowance(address owner, address spender) external view returns (uint256) { return _gi_allowance[owner][spender]; }
+
+    function transfer(address to, uint256 amount) external virtual returns (bool) {
+        _transfer(msg.sender, to, amount);
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) external virtual returns (bool) {
+        _approve(msg.sender, spender, amount);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external virtual returns (bool) {
+        uint256 cur = _gi_allowance[from][msg.sender];
+        if (cur != type(uint256).max) {
+            if (cur < amount) revert GI__Allowance();
+            unchecked { _gi_allowance[from][msg.sender] = cur - amount; }
+            emit GhostInu_Approval(from, msg.sender, _gi_allowance[from][msg.sender]);
+        }
+        _transfer(from, to, amount);
+        return true;
+    }
+
+    function _transfer(address from, address to, uint256 amount) internal virtual {
+        if (from == address(0) || to == address(0)) revert GI__ZeroAddress();
+        if (amount == 0) return;
+        uint256 bal = _gi_balance[from];
+        if (bal < amount) revert GI__Balance();
+        unchecked {
+            _gi_balance[from] = bal - amount;
+            _gi_balance[to] += amount;
+        }
+        emit GhostInu_Transfer(from, to, amount);
+    }
+
+    function _approve(address owner, address spender, uint256 amount) internal virtual {
+        if (owner == address(0)) revert GI__BadOwner();
+        if (spender == address(0)) revert GI__BadSpender();
+        _gi_allowance[owner][spender] = amount;
