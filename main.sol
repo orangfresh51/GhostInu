@@ -263,3 +263,56 @@ abstract contract GI_Pausable is GI_Admin2Step {
 
 abstract contract GI_EIP712 {
     bytes32 private immutable _gi_cachedDomainSeparator;
+    uint256 private immutable _gi_cachedChainId;
+    address private immutable _gi_cachedThis;
+
+    bytes32 private immutable _gi_nameHash;
+    bytes32 private immutable _gi_versionHash;
+
+    bytes32 private constant _GI_EIP712_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+
+    constructor(string memory name_, string memory version_) {
+        _gi_nameHash = keccak256(bytes(name_));
+        _gi_versionHash = keccak256(bytes(version_));
+        _gi_cachedChainId = block.chainid;
+        _gi_cachedThis = address(this);
+        _gi_cachedDomainSeparator = _buildDomainSeparator();
+        emit GhostInu_EIP712Domain(_gi_cachedDomainSeparator);
+    }
+
+    function _domainSeparatorV4() internal view returns (bytes32) {
+        if (address(this) == _gi_cachedThis && block.chainid == _gi_cachedChainId) {
+            return _gi_cachedDomainSeparator;
+        }
+        return _buildDomainSeparator();
+    }
+
+    function _buildDomainSeparator() private view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                _GI_EIP712_TYPEHASH,
+                _gi_nameHash,
+                _gi_versionHash,
+                block.chainid,
+                address(this)
+            )
+        );
+    }
+
+    function _hashTypedDataV4(bytes32 structHash) internal view returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19\x01", _domainSeparatorV4(), structHash));
+    }
+}
+
+// =============================================================
+//                           ERC20 CORE
+// =============================================================
+
+abstract contract GI_ERC20 is IERC20, IERC20Metadata {
+    string private _gi_name;
+    string private _gi_symbol;
+    uint8 private immutable _gi_decimals;
+
+    uint256 internal _gi_totalSupply;
+    mapping(address => uint256) internal _gi_balance;
