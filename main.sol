@@ -369,3 +369,56 @@ abstract contract GI_ERC20 is IERC20, IERC20Metadata {
         if (owner == address(0)) revert GI__BadOwner();
         if (spender == address(0)) revert GI__BadSpender();
         _gi_allowance[owner][spender] = amount;
+        emit GhostInu_Approval(owner, spender, amount);
+    }
+
+    function _mint(address to, uint256 amount) internal virtual {
+        if (to == address(0)) revert GI__ZeroAddress();
+        if (amount == 0) return;
+        _gi_totalSupply += amount;
+        unchecked { _gi_balance[to] += amount; }
+        emit GhostInu_Transfer(address(0), to, amount);
+    }
+
+    function _burn(address from, uint256 amount) internal virtual {
+        if (from == address(0)) revert GI__ZeroAddress();
+        if (amount == 0) return;
+        uint256 bal = _gi_balance[from];
+        if (bal < amount) revert GI__Balance();
+        unchecked {
+            _gi_balance[from] = bal - amount;
+            _gi_totalSupply -= amount;
+        }
+        emit GhostInu_Transfer(from, address(0), amount);
+    }
+}
+
+// =============================================================
+//                           PERMIT (EIP-2612)
+// =============================================================
+
+abstract contract GI_ERC20Permit is GI_ERC20, GI_EIP712, IERC20Permit {
+    mapping(address => uint256) internal _gi_nonces;
+
+    bytes32 internal constant _GI_PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
+    constructor(string memory name_) GI_EIP712(name_, "1") {}
+
+    function nonces(address owner) external view returns (uint256) {
+        return _gi_nonces[owner];
+    }
+
+    function DOMAIN_SEPARATOR() external view returns (bytes32) {
+        return _domainSeparatorV4();
+    }
+
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
