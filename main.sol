@@ -104,3 +104,56 @@ library GI_Strings {
             unchecked {
                 k--;
                 out[k] = bytes1(uint8(48 + (v % 10)));
+                v /= 10;
+            }
+        }
+        return string(out);
+    }
+}
+
+library GI_Math {
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }
+
+    function max(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a > b ? a : b;
+    }
+
+    function clamp(uint256 x, uint256 lo, uint256 hi) internal pure returns (uint256) {
+        if (x < lo) return lo;
+        if (x > hi) return hi;
+        return x;
+    }
+}
+
+library GI_SafeCast {
+    function toUint128(uint256 v) internal pure returns (uint128) {
+        if (v > type(uint128).max) revert GI__BadAmount();
+        return uint128(v);
+    }
+
+    function toUint64(uint256 v) internal pure returns (uint64) {
+        if (v > type(uint64).max) revert GI__BadAmount();
+        return uint64(v);
+    }
+}
+
+library GI_Address {
+    function isContract(address a) internal view returns (bool) {
+        return a.code.length != 0;
+    }
+
+    function sendValue(address payable to, uint256 amount) internal {
+        (bool ok, ) = to.call{value: amount}("");
+        if (!ok) revert GI__BadCall();
+    }
+}
+
+library GI_ECDSA {
+    function recover(bytes32 digest, uint8 v, bytes32 r, bytes32 s) internal pure returns (address) {
+        address signer = ecrecover(digest, v, r, s);
+        if (signer == address(0)) revert GI__InvalidSignature();
+        return signer;
+    }
+}
