@@ -157,3 +157,56 @@ library GI_ECDSA {
         return signer;
     }
 }
+
+library GI_SafeERC20 {
+    function safeTransfer(IERC20 token, address to, uint256 value) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
+    }
+
+    function safeTransferFrom(IERC20 token, address from, address to, uint256 value) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
+    }
+
+    function safeApprove(IERC20 token, address spender, uint256 value) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, value));
+    }
+
+    function _callOptionalReturn(IERC20 token, bytes memory data) private {
+        (bool ok, bytes memory ret) = address(token).call(data);
+        if (!ok) revert GI__BadCall();
+        if (ret.length > 0) {
+            if (!abi.decode(ret, (bool))) revert GI__BadCall();
+        }
+    }
+}
+
+// =============================================================
+//                      REENTRANCY GUARD
+// =============================================================
+
+abstract contract GI_ReentrancyGuard {
+    uint256 private constant _GI_NOT_ENTERED = 1;
+    uint256 private constant _GI_ENTERED = 2;
+    uint256 private _gi_status = _GI_NOT_ENTERED;
+
+    modifier nonReentrant() {
+        if (_gi_status == _GI_ENTERED) revert GI__Reentered();
+        _gi_status = _GI_ENTERED;
+        _;
+        _gi_status = _GI_NOT_ENTERED;
+    }
+}
+
+// =============================================================
+//                     TWO-STEP ADMIN CONTROL
+// =============================================================
+
+abstract contract GI_Admin2Step {
+    address public admin;
+    address public pendingAdmin;
+
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert GI__Unauthorized();
+        _;
+    }
+
