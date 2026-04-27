@@ -899,3 +899,56 @@ contract GhastlyStakingVault is GI_ReentrancyGuard {
 
     function earned(address account) external view returns (uint256) {
         return _earned(account);
+    }
+
+    function stake(uint256 amount) external nonReentrant whenNotPaused updateReward(msg.sender) {
+        if (amount == 0) revert GI__BadAmount();
+        uint64 nowTs = uint256(block.timestamp).toUint64();
+        if (nowTs < startTime || nowTs > endTime) revert Ghasty__OutOfWindow();
+
+        totalStaked += amount;
+        balanceOf[msg.sender] += amount;
+        stakeToken.safeTransferFrom(msg.sender, address(this), amount);
+        emit Ghasty_Staked(msg.sender, amount);
+    }
+
+    function unstake(uint256 amount) public nonReentrant whenNotPaused updateReward(msg.sender) {
+        if (amount == 0) revert GI__BadAmount();
+        uint256 bal = balanceOf[msg.sender];
+        if (bal < amount) revert GI__Balance();
+
+        unchecked {
+            balanceOf[msg.sender] = bal - amount;
+            totalStaked -= amount;
+        }
+        stakeToken.safeTransfer(msg.sender, amount);
+        emit Ghasty_Unstaked(msg.sender, amount);
+    }
+
+    function exit() external {
+        uint256 bal = balanceOf[msg.sender];
+        if (bal == 0) revert Ghasty__NoStake();
+        unstake(bal);
+        claim();
+    }
+
+    function claim() public nonReentrant whenNotPaused updateReward(msg.sender) {
+        uint256 reward = rewards[msg.sender];
+        if (reward == 0) return;
+        rewards[msg.sender] = 0;
+
+        uint256 remaining = rewardBudget - rewardSpent;
+        uint256 pay = reward.min(remaining);
+        rewardSpent += pay;
+
+        rewardToken.safeTransfer(msg.sender, pay);
+        emit Ghasty_RewardPaid(msg.sender, pay);
+    }
+
+    function sweep(address token, address to, uint256 amount) external onlyAdmin nonReentrant {
+        if (to == address(0)) revert GI__BadReceiver();
+        // Allows sweeping *non-stake* tokens only; stake token belongs to users.
+        if (token == address(stakeToken)) revert Ghasty__Unauthorized();
+        IERC20(token).safeTransfer(to, amount);
+        emit Ghasty_Swept(token, to, amount);
+    }
