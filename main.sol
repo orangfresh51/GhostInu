@@ -528,3 +528,56 @@ abstract contract GI_Haunt is GI_Roles, GI_ReentrancyGuard {
 
         // New epoch if cadence passed since lastStart.
         if (st.lastStart == 0 || nowTs >= st.lastStart + cfg.cadence) {
+            st.epoch += 1;
+            st.lastStart = nowTs;
+            st.usedPulse = 0;
+        }
+
+        // Only allow pulsing inside the active window.
+        if (nowTs > st.lastStart + cfg.window) revert GI__Expired();
+
+        uint128 newUsed = st.usedPulse + pulse;
+        if (newUsed > cfg.maxPulse) revert GI__CapExceeded();
+        st.usedPulse = newUsed;
+
+        emit GhostInu_HauntPulsed(hauntKey, msg.sender, pulse, st.epoch);
+        return st.epoch;
+    }
+}
+
+// =============================================================
+//                      OPTIONAL RESCUE UTILITIES
+// =============================================================
+
+abstract contract GI_Rescue is GI_Haunt {
+    using GI_SafeERC20 for IERC20;
+
+    constructor(address initialAdmin) GI_Haunt(initialAdmin) {}
+
+    function rescueERC20(address token, address to, uint256 amount) external nonReentrant {
+        _requireRole(ROLE_RESCUER, msg.sender);
+        if (to == address(0)) revert GI__BadReceiver();
+        IERC20(token).safeTransfer(to, amount);
+        emit GhostInu_Rescued(token, to, amount);
+    }
+
+    function rescueETH(address payable to, uint256 amount) external nonReentrant {
+        _requireRole(ROLE_RESCUER, msg.sender);
+        if (to == address(0)) revert GI__BadReceiver();
+        GI_Address.sendValue(to, amount);
+        emit GhostInu_Rescued(address(0), to, amount);
+    }
+
+    receive() external payable {}
+}
+
+// =============================================================
+//                    GHOSTINU TOKEN + LAUNCH GUARDRAILS
+// =============================================================
+
+contract GhostInu is GI_ERC20Permit, GI_Rescue {
+    using GI_SafeCast for uint256;
+    using GI_Strings for uint256;
+
+    // Generic immutables to keep the build obviously non-template.
+    address public immutable ADDRESS_A;
