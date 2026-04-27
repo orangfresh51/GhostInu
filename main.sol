@@ -475,3 +475,56 @@ abstract contract GI_Roles is GI_Pausable {
 
 struct HauntConfig {
     bool enabled;
+    uint64 cadence;
+    uint64 window;
+    uint128 maxPulse;
+}
+
+struct HauntState {
+    uint64 epoch;
+    uint64 lastStart;
+    uint128 usedPulse;
+}
+
+abstract contract GI_Haunt is GI_Roles, GI_ReentrancyGuard {
+    using GI_SafeCast for uint256;
+
+    mapping(bytes32 => HauntConfig) internal _gi_hauntCfg;
+    mapping(bytes32 => HauntState) internal _gi_hauntState;
+
+    constructor(address initialAdmin) GI_Roles(initialAdmin) {}
+
+    function hauntConfig(bytes32 hauntKey) external view returns (HauntConfig memory) {
+        return _gi_hauntCfg[hauntKey];
+    }
+
+    function hauntState(bytes32 hauntKey) external view returns (HauntState memory) {
+        return _gi_hauntState[hauntKey];
+    }
+
+    function setHauntEnabled(bytes32 hauntKey, bool enabled) external {
+        _requireRole(ROLE_CONFIGURATOR, msg.sender);
+        _gi_hauntCfg[hauntKey].enabled = enabled;
+        emit GhostInu_HauntState(hauntKey, enabled);
+    }
+
+    function configureHaunt(bytes32 hauntKey, uint64 cadence, uint64 window, uint128 maxPulse) external {
+        _requireRole(ROLE_CONFIGURATOR, msg.sender);
+        if (cadence == 0 || window == 0) revert GI__BadAmount();
+        if (window > cadence) revert GI__BadAmount();
+        if (maxPulse == 0) revert GI__BadAmount();
+        _gi_hauntCfg[hauntKey] = HauntConfig({enabled: true, cadence: cadence, window: window, maxPulse: maxPulse});
+        emit GhostInu_HauntConfigured(hauntKey, cadence, window, maxPulse);
+    }
+
+    function pulseHaunt(bytes32 hauntKey, uint128 pulse) external whenNotPaused nonReentrant returns (uint64 epoch) {
+        HauntConfig memory cfg = _gi_hauntCfg[hauntKey];
+        if (!cfg.enabled) revert GI__Unauthorized();
+        if (pulse == 0) revert GI__BadAmount();
+        if (pulse > cfg.maxPulse) revert GI__BadAmount();
+
+        HauntState storage st = _gi_hauntState[hauntKey];
+        uint64 nowTs = uint256(block.timestamp).toUint64();
+
+        // New epoch if cadence passed since lastStart.
+        if (st.lastStart == 0 || nowTs >= st.lastStart + cfg.cadence) {
