@@ -51,3 +51,56 @@ event GhostInu_HauntConfigured(bytes32 indexed hauntKey, uint64 cadence, uint64 
 event GhostInu_HauntPulsed(bytes32 indexed hauntKey, address indexed by, uint128 pulse, uint64 epoch);
 event GhostInu_HauntState(bytes32 indexed hauntKey, bool enabled);
 event GhostInu_Rescued(address indexed token, address indexed to, uint256 amount);
+event GhostInu_EIP712Domain(bytes32 indexed domainSeparator);
+
+// =============================================================
+//                        INTERFACES
+// =============================================================
+
+interface IERC20 {
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address who) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
+interface IERC20Metadata is IERC20 {
+    function name() external view returns (string memory);
+    function symbol() external view returns (string memory);
+    function decimals() external view returns (uint8);
+}
+
+interface IERC20Permit {
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+    function nonces(address owner) external view returns (uint256);
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
+}
+
+// =============================================================
+//                         LIBRARIES
+// =============================================================
+
+library GI_Strings {
+    function toString(uint256 v) internal pure returns (string memory) {
+        if (v == 0) return "0";
+        uint256 j = v;
+        uint256 len;
+        while (j != 0) {
+            unchecked { len++; j /= 10; }
+        }
+        bytes memory out = new bytes(len);
+        uint256 k = len;
+        while (v != 0) {
+            unchecked {
+                k--;
+                out[k] = bytes1(uint8(48 + (v % 10)));
