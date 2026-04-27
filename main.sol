@@ -634,3 +634,56 @@ contract GhostInu is GI_ERC20Permit, GI_Rescue {
 
     function mintTo(address to, uint256 amount) external onlyAdmin {
         if (minted) revert GI__AlreadySet();
+        if (to == address(0)) revert GI__BadReceiver();
+        if (amount == 0) revert GI__BadAmount();
+        if (amount > CAP) revert GI__CapExceeded();
+        minted = true;
+        _mint(to, amount);
+    }
+
+    // ----------------------------
+    // Token controls
+    // ----------------------------
+
+    function burn(uint256 amount) external whenNotPaused {
+        _burn(msg.sender, amount);
+    }
+
+    function setSpectralNote(string calldata note_) external onlyAdmin {
+        spectralNote = note_;
+        emit GhostInu_SpectralNote(note_);
+    }
+
+    function freezeHauntKey(bytes32 hauntKey, bool frozen) external {
+        // guardian can freeze; admin can freeze/unfreeze
+        if (msg.sender != admin) {
+            _requireRole(ROLE_GUARDIAN, msg.sender);
+            if (!frozen) revert GI__Unauthorized();
+        }
+        hauntKeyFrozen[hauntKey] = frozen;
+        emit GhostInu_HauntKeyFrozen(hauntKey, frozen);
+    }
+
+    function pulseHaunt(bytes32 hauntKey, uint128 pulse) external override whenNotPaused nonReentrant returns (uint64 epoch) {
+        if (hauntKeyFrozen[hauntKey]) revert GI__Unauthorized();
+        return super.pulseHaunt(hauntKey, pulse);
+    }
+
+    // ----------------------------
+    // Batch helpers (mainstream UX)
+    // ----------------------------
+
+    function batchTransfer(address[] calldata to, uint256[] calldata amounts) external whenNotPaused returns (bool) {
+        uint256 n = to.length;
+        if (n != amounts.length) revert GI__BadAmount();
+        for (uint256 i = 0; i < n; i++) {
+            _transfer(msg.sender, to[i], amounts[i]);
+        }
+        return true;
+    }
+
+    function batchApprove(address[] calldata spenders, uint256[] calldata amounts) external returns (bool) {
+        uint256 n = spenders.length;
+        if (n != amounts.length) revert GI__BadAmount();
+        for (uint256 i = 0; i < n; i++) {
+            _approve(msg.sender, spenders[i], amounts[i]);
