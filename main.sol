@@ -793,3 +793,56 @@ contract GhastlyStakingVault is GI_ReentrancyGuard {
         _;
     }
 
+    modifier whenNotPaused() {
+        if (paused) revert Ghasty__Paused();
+        _;
+    }
+
+    modifier updateReward(address account) {
+        rewardPerTokenStored = _rewardPerToken();
+        lastUpdateTime = _lastTimeRewardApplicable();
+        if (account != address(0)) {
+            rewards[account] = _earned(account);
+            userRewardPerTokenPaid[account] = rewardPerTokenStored;
+        }
+        _;
+    }
+
+    constructor(
+        address admin_,
+        address guardian_,
+        address stakeToken_,
+        address rewardToken_,
+        uint64 startTime_,
+        uint64 endTime_,
+        uint256 rewardBudget_
+    ) {
+        if (admin_ == address(0) || guardian_ == address(0)) revert GI__ZeroAddress();
+        if (stakeToken_ == address(0) || rewardToken_ == address(0)) revert GI__ZeroAddress();
+        if (startTime_ == 0 || endTime_ == 0 || endTime_ <= startTime_) revert Ghasty__BadConfig();
+        if (rewardBudget_ == 0) revert Ghasty__BadConfig();
+
+        admin = admin_;
+        guardian = guardian_;
+        stakeToken = IERC20(stakeToken_);
+        rewardToken = IERC20(rewardToken_);
+        startTime = startTime_;
+        endTime = endTime_;
+        rewardBudget = rewardBudget_;
+
+        lastUpdateTime = startTime_;
+
+        // rewardRate is a clean integer division; any remainder stays unspent in the budget.
+        rewardRate = rewardBudget_ / uint256(endTime_ - startTime_);
+        if (rewardRate == 0) revert Ghasty__BadConfig();
+    }
+
+    function proposeAdmin(address next) external onlyAdmin {
+        if (next == address(0)) revert GI__ZeroAddress();
+        pendingAdmin = next;
+        emit Ghasty_AdminProposed(admin, next);
+    }
+
+    function acceptAdmin() external {
+        if (msg.sender != pendingAdmin) revert GI__NotPending();
+        address prev = admin;
