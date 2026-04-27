@@ -422,3 +422,56 @@ abstract contract GI_ERC20Permit is GI_ERC20, GI_EIP712, IERC20Permit {
         bytes32 r,
         bytes32 s
     ) external {
+        if (owner == address(0)) revert GI__BadOwner();
+        if (spender == address(0)) revert GI__BadSpender();
+        if (deadline < block.timestamp) revert GI__Expired();
+
+        uint256 nonce = _gi_nonces[owner];
+        bytes32 structHash = keccak256(abi.encode(_GI_PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
+        bytes32 digest = _hashTypedDataV4(structHash);
+        address signer = GI_ECDSA.recover(digest, v, r, s);
+        if (signer != owner) revert GI__InvalidSignature();
+
+        unchecked { _gi_nonces[owner] = nonce + 1; }
+        _approve(owner, spender, value);
+    }
+}
+
+// =============================================================
+//                         LIGHTWEIGHT ROLES
+// =============================================================
+
+abstract contract GI_Roles is GI_Pausable {
+    // These are explicit literal identifiers to keep role layout stable across chains.
+    bytes32 public constant ROLE_GUARDIAN = 0x2b4bfe2b4d8f2a0a4b468217c9dc3b2d1882d2c3b688c03b504b617c1b8d6a9e;
+    bytes32 public constant ROLE_CONFIGURATOR = 0x88b7f6b5c57b9c8e2d8d2b9b925f41cc96d5a1ae65a5eaa0cd1f46d9f3c46d31;
+    bytes32 public constant ROLE_RESCUER = 0x0f7b1d3c0f0c5c0a6e26c8db0d7ab91e7afc940dbb10efc5412649b722e0d2af;
+
+    mapping(bytes32 => mapping(address => bool)) internal _gi_hasRole;
+
+    constructor(address initialAdmin) GI_Pausable(initialAdmin) {}
+
+    function hasRole(bytes32 role, address who) public view returns (bool) {
+        return _gi_hasRole[role][who];
+    }
+
+    function grantRole(bytes32 role, address who) external onlyAdmin {
+        if (who == address(0)) revert GI__ZeroAddress();
+        _gi_hasRole[role][who] = true;
+    }
+
+    function revokeRole(bytes32 role, address who) external onlyAdmin {
+        _gi_hasRole[role][who] = false;
+    }
+
+    function _requireRole(bytes32 role, address who) internal view {
+        if (!_gi_hasRole[role][who]) revert GI__Unauthorized();
+    }
+}
+
+// =============================================================
+//                      GHOST-INU: HAUNT MODULE
+// =============================================================
+
+struct HauntConfig {
+    bool enabled;
