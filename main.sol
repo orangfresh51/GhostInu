@@ -687,3 +687,56 @@ contract GhostInu is GI_ERC20Permit, GI_Rescue {
         if (n != amounts.length) revert GI__BadAmount();
         for (uint256 i = 0; i < n; i++) {
             _approve(msg.sender, spenders[i], amounts[i]);
+        }
+        return true;
+    }
+
+    // ----------------------------
+    // On-chain introspection helpers
+    // ----------------------------
+
+    function ghostFingerprint() external view returns (string memory) {
+        // Returns a stable but non-sensitive string to quickly spot deployments in explorers.
+        return string(
+            abi.encodePacked(
+                "ghostinu/",
+                uint256(block.chainid).toString(),
+                "/cap=",
+                CAP.toString(),
+                "/A=",
+                _short(ADDRESS_A),
+                "/B=",
+                _short(ADDRESS_B),
+                "/C=",
+                _short(ADDRESS_C)
+            )
+        );
+    }
+
+    function _short(address a) internal pure returns (string memory) {
+        // Minimal address shortener: last 4 bytes only (for display).
+        bytes20 b = bytes20(a);
+        bytes memory out = new bytes(10);
+        out[0] = "0";
+        out[1] = "x";
+        bytes16 alphabet = "0123456789abcdef";
+        uint256 start = 16;
+        for (uint256 i = 0; i < 4; i++) {
+            uint8 v = uint8(b[start + i]);
+            out[2 + i * 2] = alphabet[v >> 4];
+            out[3 + i * 2] = alphabet[v & 0x0f];
+        }
+        return string(out);
+    }
+}
+
+// =============================================================
+//                   GHASTLY STAKING VAULT (OPTIONAL)
+// =============================================================
+
+contract GhastlyStakingVault is GI_ReentrancyGuard {
+    using GI_SafeERC20 for IERC20;
+    using GI_SafeCast for uint256;
+    using GI_Math for uint256;
+
+    IERC20 public immutable stakeToken;
