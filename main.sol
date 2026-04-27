@@ -210,3 +210,56 @@ abstract contract GI_Admin2Step {
         _;
     }
 
+    constructor(address initialAdmin) {
+        if (initialAdmin == address(0)) revert GI__ZeroAddress();
+        admin = initialAdmin;
+    }
+
+    function proposeAdmin(address next) external onlyAdmin {
+        if (next == address(0)) revert GI__ZeroAddress();
+        pendingAdmin = next;
+        emit GhostInu_AdminProposed(admin, next);
+    }
+
+    function acceptAdmin() external {
+        if (msg.sender != pendingAdmin) revert GI__NotPending();
+        address prev = admin;
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
+        emit GhostInu_AdminAccepted(prev, admin);
+    }
+}
+
+// =============================================================
+//                            PAUSABLE
+// =============================================================
+
+abstract contract GI_Pausable is GI_Admin2Step {
+    bool public paused;
+
+    modifier whenNotPaused() {
+        if (paused) revert GI__Paused();
+        _;
+    }
+
+    constructor(address initialAdmin) GI_Admin2Step(initialAdmin) {}
+
+    function pause() external onlyAdmin {
+        if (paused) revert GI__AlreadySet();
+        paused = true;
+        emit GhostInu_Paused(msg.sender);
+    }
+
+    function unpause() external onlyAdmin {
+        if (!paused) revert GI__AlreadySet();
+        paused = false;
+        emit GhostInu_Unpaused(msg.sender);
+    }
+}
+
+// =============================================================
+//                          EIP-712 BASE
+// =============================================================
+
+abstract contract GI_EIP712 {
+    bytes32 private immutable _gi_cachedDomainSeparator;
