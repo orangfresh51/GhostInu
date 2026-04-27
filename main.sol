@@ -846,3 +846,56 @@ contract GhastlyStakingVault is GI_ReentrancyGuard {
     function acceptAdmin() external {
         if (msg.sender != pendingAdmin) revert GI__NotPending();
         address prev = admin;
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
+        emit Ghasty_AdminAccepted(prev, admin);
+    }
+
+    function setGuardian(address next) external onlyAdmin {
+        if (next == address(0)) revert GI__ZeroAddress();
+        address prev = guardian;
+        guardian = next;
+        emit Ghasty_GuardianSet(prev, next);
+    }
+
+    function pause() external onlyGuardianOrAdmin {
+        if (paused) revert GI__AlreadySet();
+        paused = true;
+        emit Ghasty_Paused(msg.sender);
+    }
+
+    function unpause() external onlyAdmin {
+        if (!paused) revert GI__AlreadySet();
+        paused = false;
+        emit Ghasty_Unpaused(msg.sender);
+    }
+
+    function _lastTimeRewardApplicable() internal view returns (uint64) {
+        uint64 nowTs = uint256(block.timestamp).toUint64();
+        if (nowTs < startTime) return startTime;
+        if (nowTs > endTime) return endTime;
+        return nowTs;
+    }
+
+    function _rewardPerToken() internal view returns (uint256) {
+        if (totalStaked == 0) return rewardPerTokenStored;
+        uint64 t = _lastTimeRewardApplicable();
+        uint64 dt = t - lastUpdateTime;
+        if (dt == 0) return rewardPerTokenStored;
+        // Scale by 1e18 to keep precision even for low reward rates.
+        return rewardPerTokenStored + (uint256(dt) * rewardRate * 1e18) / totalStaked;
+    }
+
+    function _earned(address account) internal view returns (uint256) {
+        uint256 perToken = _rewardPerToken();
+        uint256 paid = userRewardPerTokenPaid[account];
+        uint256 delta = perToken - paid;
+        return rewards[account] + (balanceOf[account] * delta) / 1e18;
+    }
+
+    function rewardPerToken() external view returns (uint256) {
+        return _rewardPerToken();
+    }
+
+    function earned(address account) external view returns (uint256) {
+        return _earned(account);
