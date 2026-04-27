@@ -581,3 +581,56 @@ contract GhostInu is GI_ERC20Permit, GI_Rescue {
 
     // Generic immutables to keep the build obviously non-template.
     address public immutable ADDRESS_A;
+    address public immutable ADDRESS_B;
+    address public immutable ADDRESS_C;
+
+    uint256 public immutable CAP;
+
+    // Optional: a simple mint lock so supply behavior is auditable.
+    bool public minted;
+
+    // A "spectral note" field that can be updated by admin. Useful for on-chain announcement text.
+    string public spectralNote;
+
+    // A compact throttle for emergency stop of haunt only (not transfers).
+    mapping(bytes32 => bool) public hauntKeyFrozen;
+
+    event GhostInu_SpectralNote(string note);
+    event GhostInu_HauntKeyFrozen(bytes32 indexed hauntKey, bool frozen);
+
+    constructor(
+        address admin_,
+        address guardian_,
+        address addressA_,
+        address addressB_,
+        address addressC_,
+        uint256 cap_,
+        string memory note_
+    )
+        GI_ERC20("ghostinu", "GHOSTINU", 18)
+        GI_ERC20Permit("ghostinu")
+        GI_Rescue(admin_)
+    {
+        if (guardian_ == address(0)) revert GI__ZeroAddress();
+        if (addressA_ == address(0) || addressB_ == address(0) || addressC_ == address(0)) revert GI__ZeroAddress();
+        if (cap_ == 0) revert GI__BadAmount();
+
+        ADDRESS_A = addressA_;
+        ADDRESS_B = addressB_;
+        ADDRESS_C = addressC_;
+        CAP = cap_;
+
+        _gi_hasRole[ROLE_GUARDIAN][guardian_] = true;
+        _gi_hasRole[ROLE_CONFIGURATOR][admin_] = true;
+        _gi_hasRole[ROLE_RESCUER][admin_] = true;
+
+        spectralNote = note_;
+        emit GhostInu_SpectralNote(note_);
+    }
+
+    // ----------------------------
+    // Supply
+    // ----------------------------
+
+    function mintTo(address to, uint256 amount) external onlyAdmin {
+        if (minted) revert GI__AlreadySet();
