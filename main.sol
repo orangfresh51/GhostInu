@@ -952,3 +952,56 @@ contract GhastlyStakingVault is GI_ReentrancyGuard {
         IERC20(token).safeTransfer(to, amount);
         emit Ghasty_Swept(token, to, amount);
     }
+}
+
+// =============================================================
+//                    LINEAR VESTING ESCROW (OPTIONAL)
+// =============================================================
+
+contract GhostInuVestingEscrow is GI_ReentrancyGuard {
+    using GI_SafeERC20 for IERC20;
+    using GI_SafeCast for uint256;
+
+    IERC20 public immutable token;
+    address public admin;
+    address public pendingAdmin;
+
+    struct Grant {
+        address beneficiary;
+        uint128 total;
+        uint128 claimed;
+        uint64 start;
+        uint64 cliff;
+        uint64 end;
+        bool revocable;
+        bool revoked;
+    }
+
+    uint256 public nextGrantId = 1;
+    mapping(uint256 => Grant) public grants;
+
+    event Vest_AdminProposed(address indexed currentAdmin, address indexed pendingAdmin);
+    event Vest_AdminAccepted(address indexed previousAdmin, address indexed newAdmin);
+    event Vest_GrantCreated(uint256 indexed grantId, address indexed beneficiary, uint128 total, uint64 start, uint64 cliff, uint64 end, bool revocable);
+    event Vest_Claimed(uint256 indexed grantId, address indexed beneficiary, uint128 amount);
+    event Vest_Revoked(uint256 indexed grantId, uint128 reclaimed);
+
+    error Vest__Unauthorized();
+    error Vest__BadGrant();
+
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert Vest__Unauthorized();
+        _;
+    }
+
+    constructor(address admin_, address token_) {
+        if (admin_ == address(0) || token_ == address(0)) revert GI__ZeroAddress();
+        admin = admin_;
+        token = IERC20(token_);
+    }
+
+    function proposeAdmin(address next) external onlyAdmin {
+        if (next == address(0)) revert GI__ZeroAddress();
+        pendingAdmin = next;
+        emit Vest_AdminProposed(admin, next);
+    }
