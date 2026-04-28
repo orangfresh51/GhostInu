@@ -1058,3 +1058,41 @@ contract GhostInuVestingEscrow is GI_ReentrancyGuard {
     }
 
     function claimable(uint256 grantId) public view returns (uint128) {
+        Grant memory g = grants[grantId];
+        if (g.beneficiary == address(0)) revert Vest__BadGrant();
+        uint64 nowTs = uint256(block.timestamp).toUint64();
+        uint128 v = vested(grantId, nowTs);
+        if (v <= g.claimed) return 0;
+        return v - g.claimed;
+    }
+
+    function claim(uint256 grantId) external nonReentrant {
+        Grant storage g = grants[grantId];
+        if (g.beneficiary == address(0)) revert Vest__BadGrant();
+        if (msg.sender != g.beneficiary) revert Vest__Unauthorized();
+
+        uint128 amt = claimable(grantId);
+        if (amt == 0) return;
+        g.claimed += amt;
+        token.safeTransfer(g.beneficiary, amt);
+        emit Vest_Claimed(grantId, g.beneficiary, amt);
+    }
+
+    function revoke(uint256 grantId, uint64 revokeTime) external onlyAdmin nonReentrant {
+        Grant storage g = grants[grantId];
+        if (g.beneficiary == address(0)) revert Vest__BadGrant();
+        if (!g.revocable || g.revoked) revert Vest__BadGrant();
+        if (revokeTime < g.start || revokeTime > g.end) revert Vest__BadGrant();
+
+        uint128 vestedAtRevoke = vested(grantId, revokeTime);
+        uint128 unvested = g.total - vestedAtRevoke;
+
+        g.revoked = true;
+        g.end = revokeTime;
+
+        if (unvested > 0) {
+            token.safeTransfer(admin, unvested);
+        }
+        emit Vest_Revoked(grantId, unvested);
+    }
+}
