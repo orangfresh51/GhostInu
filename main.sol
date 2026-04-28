@@ -1005,3 +1005,56 @@ contract GhostInuVestingEscrow is GI_ReentrancyGuard {
         pendingAdmin = next;
         emit Vest_AdminProposed(admin, next);
     }
+
+    function acceptAdmin() external {
+        if (msg.sender != pendingAdmin) revert GI__NotPending();
+        address prev = admin;
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
+        emit Vest_AdminAccepted(prev, admin);
+    }
+
+    function createGrant(
+        address beneficiary,
+        uint128 total,
+        uint64 start,
+        uint64 cliff,
+        uint64 end,
+        bool revocable
+    ) external onlyAdmin nonReentrant returns (uint256 grantId) {
+        if (beneficiary == address(0)) revert GI__BadReceiver();
+        if (total == 0) revert GI__BadAmount();
+        if (start == 0 || end == 0 || end <= start) revert Vest__BadGrant();
+        if (cliff < start || cliff > end) revert Vest__BadGrant();
+
+        grantId = nextGrantId++;
+        grants[grantId] = Grant({
+            beneficiary: beneficiary,
+            total: total,
+            claimed: 0,
+            start: start,
+            cliff: cliff,
+            end: end,
+            revocable: revocable,
+            revoked: false
+        });
+
+        emit Vest_GrantCreated(grantId, beneficiary, total, start, cliff, end, revocable);
+        return grantId;
+    }
+
+    function vested(uint256 grantId, uint64 asOf) public view returns (uint128) {
+        Grant memory g = grants[grantId];
+        if (g.beneficiary == address(0)) revert Vest__BadGrant();
+        if (g.revoked) {
+            // If revoked, vesting freezes at the revoke time stored as end.
+            asOf = g.end;
+        }
+        if (asOf < g.cliff) return 0;
+        if (asOf >= g.end) return g.total;
+        uint256 span = uint256(g.end - g.start);
+        uint256 prog = uint256(asOf - g.start);
+        return uint256(g.total * uint128(prog)).toUint128() / span.toUint128();
+    }
+
+    function claimable(uint256 grantId) public view returns (uint128) {
